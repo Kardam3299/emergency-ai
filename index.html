@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrisisIQ — AI Crisis Decision Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="logo">CrisisIQ <span class="pulse-indicator"></span></h1>
+            <p class="tagline">Turn panic into a plan — in seconds</p>
+            <p class="disclaimer">For guidance only. Always contact official emergency services.</p>
+        </header>
+
+        <div class="settings">
+            <h3>API Settings</h3>
+            <div class="api-status">
+                <span id="apiStatus" class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">API Key Not Configured</span>
+                </span>
+            </div>
+            <input type="password" id="apiKey" class="api-key-input" placeholder="Enter your Google Gemini API Key">
+            <button class="save-key" onclick="saveApiKey()">Save Key</button>
+            <span id="keySaved" class="checkmark">✓ Saved</span>
+        </div>
+        <button class="settings-toggle" onclick="toggleSettings()">⚙️ API Settings</button>
+
+        <div class="input-section">
+            <!-- Image Upload Section -->
+            <div class="photo-upload" id="imageUploadSection" onclick="document.getElementById('photoInput').click()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                <div class="upload-icon">📸</div>
+                <div class="upload-text">Click or drag photo of accident here</div>
+                <div class="upload-hint">Supported formats: JPG, PNG, GIF</div>
+                <img id="photoPreview" class="preview-image" style="display:none;"/>
+                <div id="photoFileName" style="color: #8b949e; margin-top: 5px; font-size: 0.9rem;"></div>
+            </div>
+            <input type="file" id="photoInput" accept="image/*" onchange="handleImageUpload(event)"/>
+
+            <!-- Text Input -->
+            <div class="input-row">
+                <textarea id="crisisInput" class="text-input" placeholder="Describe your emergency situation..."></textarea>
+                <button id="micBtn" class="voice-input" onclick="startVoiceInput()">🎤 Voice Input</button>
+            </div>
+
+            <!-- Location Button -->
+            <button class="location-btn" onclick="getUserLocation()">📍 Get My Location & Nearby Help</button>
+            <div id="locationDisplay" style="display:none;"></div>
+
+            <!-- Crisis Type & Action Buttons -->
+            <div class="input-row">
+                <select id="crisisType" class="crisis-type">
+                    <option value="Auto-detect">Auto-detect</option>
+                    <option value="Fire">Fire</option>
+                    <option value="Medical">Medical</option>
+                    <option value="Flood">Flood</option>
+                    <option value="Road Accident">Road Accident</option>
+                    <option value="Mental Health">Mental Health</option>
+                    <option value="Industrial">Industrial</option>
+                    <option value="Other">Other</option>
+                </select>
+                <button id="getPlanBtn" class="analyze-btn" onclick="getActionPlan()">🚨 Get Action Plan</button>
+                <button id="demoBtn" class="analyze-btn" style="background: linear-gradient(135deg, #238636 0%, #2ea043 100%); margin-left: 10px;" onclick="loadDemo()">🎯 Demo Mode</button>
+            </div>
+        </div>
+
+        <div class="examples">
+            <h3>Example Scenarios</h3>
+            <div class="example-cards">
+                <div class="example-card" onclick="loadExample('Kitchen fire, 20 people trapped')">Kitchen fire, 20 people trapped</div>
+                <div class="example-card" onclick="loadExample('Person collapsed, not breathing')">Person collapsed, not breathing</div>
+                <div class="example-card" onclick="loadExample('Flash flood, elderly people stuck')">Flash flood, elderly people stuck</div>
+                <div class="example-card" onclick="loadExample('Road accident, fuel leaking')">Road accident, fuel leaking</div>
+            </div>
+        </div>
+
+        <div id="outputSection" class="output-section">
+            <div id="crisisSummary" class="crisis-summary"></div>
+            <div id="actions" class="actions"></div>
+            <div id="doNotDo" class="do-not-do"></div>
+            <div id="additionalNote" class="additional-note"></div>
+            <div class="emergency-contacts">
+                <h4>Emergency Contacts (India)</h4>
+                <div class="contacts">
+                    <div class="contact"><strong>112</strong> National Emergency</div>
+                    <div class="contact"><strong>108</strong> Ambulance</div>
+                    <div class="contact"><strong>101</strong> Fire</div>
+                    <div class="contact"><strong>100</strong> Police</div>
+                    <div class="contact"><strong>9152987821</strong> iCall (Mental Health)</div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            Built for Rapid Crisis Thinking Hackathon | Powered by Google Gemini AI
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+</body>
+</html>
