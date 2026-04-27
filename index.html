@@ -4,15 +4,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CrisisIQ — AI Crisis Decision Engine</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css?v=2">
+    <link rel="stylesheet" href="modal-styles.css?v=2">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Firebase SDKs (Required for Cloud Upload) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 </head>
 <body>
+    
+    <!-- Top Navigation Bar (Matches Mockup) -->
+    <nav class="top-nav">
+        <ul class="nav-links">
+            <li class="active">Dashboard</li>
+            <li onclick="viewSavedReports()">Reports</li>
+            <li onclick="showResourcesModal()">Resources</li>
+            <li onclick="toggleSettings()">Settings</li>
+        </ul>
+        <button class="profile-btn" onclick="showUserInfoModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            Profile ⌄
+        </button>
+    </nav>
+
     <div class="container">
+        <!-- Safety Banner -->
+        <div class="demo-safety-banner">
+            ⚠️ Demo Mode: No real emergency services are contacted
+        </div>
+
         <header>
-            <h1 class="logo">CrisisIQ <span class="pulse-indicator"></span></h1>
-            <p class="tagline">Turn panic into a plan — in seconds</p>
-            <p class="disclaimer">For guidance only. Always contact official emergency services.</p>
+            <h1 class="logo">
+                <span class="logo-icon">🅒</span> CrisisIQ
+                <span class="pulse-indicator"></span>
+            </h1>
         </header>
 
         <div class="settings">
@@ -23,48 +51,191 @@
                     <span class="status-text">API Key Not Configured</span>
                 </span>
             </div>
-            <input type="password" id="apiKey" class="api-key-input" placeholder="Enter your Google Gemini API Key">
+            <input type="password" id="apiKey" class="api-key-input" placeholder="Enter your OpenRouter API Key">
             <button class="save-key" onclick="saveApiKey()">Save Key</button>
             <span id="keySaved" class="checkmark">✓ Saved</span>
         </div>
-        <button class="settings-toggle" onclick="toggleSettings()">⚙️ API Settings</button>
 
-        <div class="input-section">
-            <!-- Image Upload Section -->
-            <div class="photo-upload" id="imageUploadSection" onclick="document.getElementById('photoInput').click()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
-                <div class="upload-icon">📸</div>
-                <div class="upload-text">Click or drag photo of accident here</div>
-                <div class="upload-hint">Supported formats: JPG, PNG, GIF</div>
-                <img id="photoPreview" class="preview-image" style="display:none;"/>
-                <div id="photoFileName" style="color: #8b949e; margin-top: 5px; font-size: 0.9rem;"></div>
+        <!-- User Info Modal -->
+        <div id="userInfoModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeUserInfoModal()">&times;</span>
+                <h2>Your Information</h2>
+                <p style="color: #a1a1aa; margin-bottom: 20px;">This information will be saved with each crisis report</p>
+                <input type="text" id="inputName" class="modal-input" placeholder="Enter your full name">
+                <input type="tel" id="inputContact" class="modal-input" placeholder="Enter your contact number">
+                <div style="margin-top: 15px; color: #a1a1aa; font-size: 0.9rem;">
+                    <strong>Your ID:</strong> <code style="background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px;">${AppState.userId}</code>
+                </div>
+                <button onclick="submitUserInfo()" style="width: 100%; padding: 14px; margin-top: 20px; background: #3b82f6; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 1.05rem;">Save Information</button>
             </div>
-            <input type="file" id="photoInput" accept="image/*" onchange="handleImageUpload(event)"/>
+        </div>
 
-            <!-- Text Input -->
-            <div class="input-row">
-                <textarea id="crisisInput" class="text-input" placeholder="Describe your emergency situation..."></textarea>
-                <button id="micBtn" class="voice-input" onclick="startVoiceInput()">🎤 Voice Input</button>
+        <!-- Reports Modal -->
+        <div id="reportsModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+                <span class="close" onclick="closeReportsModal()">&times;</span>
+                <h2>Saved Crisis Reports</h2>
+                <div id="reportsList" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+
+        <!-- Resources Modal -->
+        <div id="resourcesModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+                <span class="close" onclick="closeResourcesModal()">&times;</span>
+                <h2>Emergency Resources</h2>
+                
+                <h3 style="color: #60a5fa; margin-top: 15px; margin-bottom: 10px; font-size: 1.1rem;">📍 Nearby Help</h3>
+                <button onclick="getUserLocation(); closeResourcesModal();" style="width: 100%; padding: 12px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.5); color: #60a5fa; border-radius: 8px; cursor: pointer; font-weight: 600; margin-bottom: 20px; transition: all 0.3s ease;">Scan for Nearby Hospitals & Police</button>
+                
+                <h3 style="color: #fca5a5; margin-bottom: 10px; font-size: 1.1rem;">📞 Emergency Directory (India)</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);"><strong>112</strong> - National Emergency</div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);"><strong>108</strong> - Ambulance</div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);"><strong>100</strong> - Police</div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);"><strong>101</strong> - Fire</div>
+                    <div style="background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2); grid-column: span 2;"><strong>9152987821</strong> - iCall (Mental Health)</div>
+                </div>
+
+                <h3 style="color: #34d399; margin-bottom: 10px; font-size: 1.1rem;">📘 Quick First Aid Guides</h3>
+                <ul style="color: #d4d4d8; padding-left: 20px; font-size: 0.95rem; line-height: 1.6;">
+                    <li><strong>CPR:</strong> Push hard and fast in the center of the chest (100-120 beats per minute).</li>
+                    <li><strong>Bleeding:</strong> Apply firm, direct pressure with a clean cloth until bleeding stops.</li>
+                    <li><strong>Burns:</strong> Cool the burn under running water for at least 10 minutes. Do not apply ice.</li>
+                    <li><strong>Choking:</strong> Perform abdominal thrusts (Heimlich maneuver) just above the navel.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Emergency Action Banner -->
+        <div id="emergencyBanner" class="emergency-banner" style="display: none;">
+            <div class="emergency-content">
+                <span class="emergency-icon">🚨</span>
+                <span class="emergency-text">HIGH EMERGENCY DETECTED</span>
+                <button class="emergency-action-btn" onclick="startEmergencyMode(true)">
+                    📞 Get Immediate Help
+                </button>
+            </div>
+        </div>
+
+        <!-- Emergency Consent Modal -->
+        <div id="emergencyConfirmModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                <span class="close" onclick="closeEmergencyConfirmModal()">&times;</span>
+                <h2 style="color: #ef4444; margin-bottom: 15px;">Enable Emergency Mode?</h2>
+                <p style="color: #a1a1aa; margin-bottom: 25px;">To provide the best assistance, we can record the situation and share your live location with emergency services.</p>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <button class="analyze-btn orange-glow" onclick="startEmergencyMode(true)">
+                        Yes, Record & Share Location
+                    </button>
+                    <button class="analyze-btn" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);" onclick="startEmergencyMode(false)">
+                        No, Only Notify Authorities
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Assist UI Overlay -->
+        <div id="liveAssistUI" class="live-assist-overlay" style="display: none;">
+            <div class="live-assist-content">
+                <h2 style="color: #ef4444; margin-bottom: 20px;">🚨 Live Emergency Assist</h2>
+                
+                <div class="camera-container">
+                    <video id="cameraFeed" autoplay muted playsinline></video>
+                    <div class="recording-badge">
+                        <span id="recordingIndicator" class="blinking-dot"></span>
+                        <span id="recordingStatusText">Initializing...</span>
+                    </div>
+                </div>
+
+                <div id="emergencyActionsContainer" style="margin-top: 20px; width: 100%;">
+                    <p style="color: #60a5fa; margin-bottom: 5px;">📍 Location Shared</p>
+                    <p style="color: #34d399; margin-bottom: 20px;">📞 Emergency Services Notified</p>
+                    <button class="analyze-btn" style="background: #3f3f46; border: 1px solid #52525b;" onclick="cancelEmergencyMode()">
+                        Stop Emergency Mode
+                    </button>
+                </div>
+
+                <p style="font-size: 0.8rem; color: #a1a1aa; margin-top: 20px; font-style: italic;">
+                    *This feature works with user consent and is for assistance purposes only.
+                </p>
+            </div>
+        </div>
+
+        <!-- Fullscreen Red Flash Overlay -->
+        <div id="redFlashOverlay" class="red-flash-overlay"></div>
+
+        <!-- Toast Notification -->
+        <div id="toastNotification" class="toast-notification">
+            <span id="toastMessage"></span>
+        </div>
+
+        <!-- Smart Emergency Log Status -->
+        <div class="smart-status-log" id="smartStatusLog">
+            <h4>System Status</h4>
+            <div id="statusMessages"></div>
+        </div>
+
+        <!-- Hidden Phone Dialer Trigger -->
+        <a href="tel:112" id="demoDialer" style="display: none;"></a>
+
+        <!-- Main Glassmorphism Area -->
+        <div class="input-section glass-main-grid">
+            
+            <!-- Left Column: Text Input -->
+            <div class="grid-column">
+                <h3 class="column-title">Emergency Crisis Input</h3>
+                <textarea id="crisisInput" class="text-input" placeholder="Describe the crisis situation in detail..."></textarea>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button id="getPlanBtn" class="analyze-btn orange-glow" onclick="getActionPlan()">Get Action Plan</button>
+                </div>
             </div>
 
-            <!-- Location Button -->
-            <button class="location-btn" onclick="getUserLocation()">📍 Get My Location & Nearby Help</button>
-            <div id="locationDisplay" style="display:none;"></div>
-
-            <!-- Crisis Type & Action Buttons -->
-            <div class="input-row">
-                <select id="crisisType" class="crisis-type">
-                    <option value="Auto-detect">Auto-detect</option>
-                    <option value="Fire">Fire</option>
-                    <option value="Medical">Medical</option>
-                    <option value="Flood">Flood</option>
-                    <option value="Road Accident">Road Accident</option>
-                    <option value="Mental Health">Mental Health</option>
-                    <option value="Industrial">Industrial</option>
-                    <option value="Other">Other</option>
-                </select>
-                <button id="getPlanBtn" class="analyze-btn" onclick="getActionPlan()">🚨 Get Action Plan</button>
-                <button id="demoBtn" class="analyze-btn" style="background: linear-gradient(135deg, #238636 0%, #2ea043 100%); margin-left: 10px;" onclick="loadDemo()">🎯 Demo Mode</button>
+            <!-- Right Column: Photo Upload -->
+            <div class="grid-column">
+                <h3 class="column-title">Photo Upload Drop Zone</h3>
+                <div class="photo-upload-box" id="imageUploadSection" onclick="document.getElementById('photoInput').click()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                    <div class="upload-content">
+                        <p>Drag & Drop or Click to<br>Upload Images/Videos</p>
+                    </div>
+                    <img id="photoPreview" class="preview-image" style="display:none;"/>
+                    <div id="photoFileName" style="color: #a1a1aa; margin-top: 10px; font-size: 0.95rem;"></div>
+                </div>
+                <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="handleImageUpload(event)"/>
+                
+                <button class="analyze-btn orange-glow" style="margin-top: 15px;" onclick="startEmergencyMode(true)">🚨 Get Immediate Help</button>
             </div>
+
+        </div>
+        
+        <!-- AI Output Section -->
+        <div id="outputSection" class="output-section" style="display: none;">
+            <div id="crisisSummary"></div>
+            <div id="actions"></div>
+            <div id="doNotDo" class="warning-box" style="display: none;"></div>
+            <div id="additionalNote" style="display: none; margin-top: 20px; font-size: 0.9rem; color: #a1a1aa;"></div>
+        </div>
+        
+        <div id="locationDisplay" style="display:none; margin-bottom: 20px;"></div>
+        <div id="map" style="display:none; height: 400px; width: 100%; margin-bottom: 30px; border-radius: 14px; border: 1px solid rgba(147, 197, 253, 0.15); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);"></div>
+        
+        <!-- Controls that were moved out of the main grid -->
+        <div class="secondary-controls">
+            <button id="micBtn" class="voice-input" onclick="startVoiceInput()">🎤 Voice Input</button>
+            <button id="smartListenBtn" class="voice-input smart-listen" onclick="toggleSmartListening()">🎙️ Start Listening (Help)</button>
+            <select id="crisisType" class="crisis-type">
+                <option value="Auto-detect">Auto-detect</option>
+                <option value="Fire">Fire</option>
+                <option value="Medical">Medical</option>
+                <option value="Flood">Flood</option>
+                <option value="Road Accident">Road Accident</option>
+                <option value="Mental Health">Mental Health</option>
+                <option value="Industrial">Industrial</option>
+                <option value="Other">Other</option>
+            </select>
+            <button id="demoBtn" class="demo-btn" onclick="loadDemo()">Demo Mode</button>
         </div>
 
         <div class="examples">
@@ -77,21 +248,53 @@
             </div>
         </div>
 
-        <div id="outputSection" class="output-section">
-            <div id="crisisSummary" class="crisis-summary"></div>
-            <div id="actions" class="actions"></div>
-            <div id="doNotDo" class="do-not-do"></div>
-            <div id="additionalNote" class="additional-note"></div>
-            <div class="emergency-contacts">
-                <h4>Emergency Contacts (India)</h4>
-                <div class="contacts">
-                    <div class="contact"><strong>112</strong> National Emergency</div>
-                    <div class="contact"><strong>108</strong> Ambulance</div>
-                    <div class="contact"><strong>101</strong> Fire</div>
-                    <div class="contact"><strong>100</strong> Police</div>
-                    <div class="contact"><strong>9152987821</strong> iCall (Mental Health)</div>
-                </div>
+        <!-- AI-Powered Emergency Guidance Chatbot -->
+        <div id="chatbot" class="chatbot" style="display: none;">
+            <div class="chatbot-header">
+                <h3>Emergency Guidance</h3>
+                <button class="close-chatbot" onclick="toggleChatbot()">&times;</button>
             </div>
+            <div id="chatbotMessages" class="chatbot-messages"></div>
+            <div class="chatbot-input">
+                <input type="text" id="chatbotInput" placeholder="Type your question...">
+                <button onclick="sendChatbotMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- Language Selector -->
+        <div class="language-selector">
+            <label for="language">Language:</label>
+            <select id="language" onchange="changeLanguage()">
+                <option value="en">English</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="hi">हिंदी</option>
+                <option value="zh">中文</option>
+            </select>
+        </div>
+
+        <!-- Incident Timeline -->
+        <div id="incidentTimeline" class="timeline" style="display: none;">
+            <h3>Incident Timeline</h3>
+            <ul id="timelineList"></ul>
+        </div>
+
+        <!-- Accessibility Options -->
+        <div class="accessibility-options">
+            <button onclick="toggleHighContrast()">High Contrast</button>
+            <button onclick="toggleLargeText()">Large Text</button>
+        </div>
+
+        <!-- Quick First Aid AR Overlay -->
+        <div id="firstAidAR" class="ar-overlay" style="display: none;">
+            <h3>Quick First Aid</h3>
+            <p id="arInstructions">Point your camera at the injured area for guidance.</p>
+        </div>
+
+        <!-- Nearby Help Map -->
+        <div id="nearbyHelpMap" class="map-container" style="display: none;">
+            <h3>Nearby Help</h3>
+            <div id="map"></div>
         </div>
 
         <footer>
@@ -100,6 +303,9 @@
     </div>
 
     <!-- Scripts -->
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="js/emergency.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
