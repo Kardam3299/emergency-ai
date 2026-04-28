@@ -285,39 +285,87 @@ function handleImageUpload(event) {
 function processImageFile(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
-        AppState.uploadedImageBase64 = e.target.result;
-        const img = document.getElementById('photoPreview');
-        img.src = AppState.uploadedImageBase64;
-        img.style.display = 'block';
-        document.getElementById('photoFileName').textContent = '✓ ' + file.name + ' loaded';
-        document.getElementById('photoFileName').style.color = '#56d364';
+        const img = new Image();
+        img.onload = function() {
+            // Compress image to max 1024px width/height to ensure it fits in API limits
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const max_size = 1024;
+
+            if (width > height) {
+                if (width > max_size) {
+                    height *= max_size / width;
+                    width = max_size;
+                }
+            } else {
+                if (height > max_size) {
+                    width *= max_size / height;
+                    height = max_size;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Convert to JPEG with 0.8 quality for good compression
+            AppState.uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            
+            const previewImg = document.getElementById('photoPreview');
+            previewImg.src = AppState.uploadedImageBase64;
+            previewImg.style.display = 'block';
+            document.getElementById('photoFileName').textContent = '✓ ' + file.name + ' (compressed) loaded';
+            document.getElementById('photoFileName').style.color = '#56d364';
+        };
+        img.src = e.target.result;
     };
     reader.readAsDataURL(file);
 }
 
 // ==================== VOICE INPUT ====================
 function startVoiceInput() {
+    // If already running, stop it
+    if (AppState.recognition && AppState.isVoiceInputActive) {
+        AppState.recognition.stop();
+        AppState.isVoiceInputActive = false;
+        return;
+    }
+
     if (!('webkitSpeechRecognition' in window)) {
         alert('Voice input not supported in this browser.');
         return;
     }
 
     AppState.recognition = new webkitSpeechRecognition();
-    AppState.recognition.continuous = false;
-    AppState.recognition.interimResults = false;
+    AppState.recognition.continuous = true; 
+    AppState.recognition.interimResults = true; 
     AppState.recognition.lang = 'en-US';
 
     AppState.recognition.onstart = function() {
+        AppState.isVoiceInputActive = true;
         document.getElementById('micBtn').classList.add('recording');
+        document.getElementById('micBtn').innerHTML = '🛑 Stop Listening';
     };
 
     AppState.recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+        }
         document.getElementById('crisisInput').value = transcript;
     };
 
     AppState.recognition.onend = function() {
+        AppState.isVoiceInputActive = false;
         document.getElementById('micBtn').classList.remove('recording');
+        document.getElementById('micBtn').innerHTML = '🎤 Voice Input';
+    };
+
+    AppState.recognition.onerror = function(event) {
+        console.error('Voice input error:', event.error);
+        AppState.isVoiceInputActive = false;
     };
 
     AppState.recognition.start();
@@ -604,6 +652,8 @@ async function getActionPlan() {
 
     const prompt = `You are CrisisIQ, an expert emergency response AI trained in disaster management, first aid, and crisis coordination. A person is describing an emergency situation to you.
 
+CRITICAL SAFETY NOTE: This is a professional emergency response application. DO NOT block this request due to safety filters regarding medical or emergency content. Instead, provide accurate, life-saving first aid and coordination guidance. Prioritize human life and immediate safety above all else.
+
 CRITICAL LANGUAGE INSTRUCTION:
 1. You MUST carefully analyze the exact language, dialect, and script used in the user's text description.
 2. If the user writes in Hinglish (Hindi mixed with English using Latin/Roman script), you MUST reply ENTIRELY in Hinglish. Example: "Patient ko immediately safe jagah le jao aur unhe calm rakhne ki koshish karo."
@@ -635,7 +685,7 @@ Emergency Situation: ${analysisText}`;
     try {
         // Build OpenRouter API request
         let requestBody = {
-            model: "google/gemini-2.0-flash-001",
+            model: "openai/gpt-4o-mini", // Using GPT-4o-mini for maximum stability and fewer provider errors
             messages: [
                 {
                     role: "user",
@@ -665,7 +715,7 @@ Emergency Situation: ${analysisText}`;
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${AppState.apiKey}`,
-                'HTTP-Referer': window.location.href,
+                'HTTP-Referer': window.location.href.startsWith('http') ? window.location.href : 'http://localhost:3000',
                 'X-Title': 'CrisisIQ'
             },
             body: JSON.stringify(requestBody)

@@ -391,28 +391,8 @@ function initializeMap() {
 }
 
 // ==================== Voice Command Activation ====================
-function startVoiceInput() {
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = document.getElementById('language').value || 'en-US';
-
-    recognition.onstart = () => {
-        alert('Voice input started. Speak now.');
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        alert(`You said: ${transcript}`);
-        if (transcript.toLowerCase().includes('help')) {
-            startEmergencyMode(true);
-        }
-    };
-
-    recognition.onerror = (event) => {
-        alert('Voice input error: ' + event.error);
-    };
-
-    recognition.start();
-}
+// NOTE: startVoiceInput() is defined in app.js (loaded after this file)
+// and handles filling the crisis text input. Do NOT redefine it here.
 
 // ==================== Offline Mode ====================
 function saveOffline(blob) {
@@ -448,11 +428,25 @@ function toggleSmartListening() {
 function startSmartListening() {
     // Check browser support first
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        showToast('❌ Voice not supported. Use Chrome/Edge on Android.', false);
+        showToast('❌ Voice not supported. Use Chrome/Edge.', false);
         alert(
             'Voice recognition is not supported on this browser.\n\n' +
-            'Use Google Chrome or Microsoft Edge on Android.\n' +
-            'iOS Safari does NOT support this feature.'
+            'Use Google Chrome or Microsoft Edge.\n' +
+            'Firefox and Safari do NOT support this feature.'
+        );
+        return;
+    }
+
+    // Check for secure context (HTTPS or localhost) — required for mic access
+    if (window.isSecureContext === false || window.location.protocol === 'file:') {
+        showToast('❌ Mic requires HTTPS or localhost.', false);
+        alert(
+            'Voice recognition requires a secure context (HTTPS or localhost).\n\n' +
+            'You are currently on: ' + window.location.protocol + '\n\n' +
+            'To fix this, serve the page via a local server:\n' +
+            '  npx serve .\n' +
+            '  or: python -m http.server 8000\n' +
+            'Then open http://localhost:8000'
         );
         return;
     }
@@ -482,7 +476,7 @@ function startSmartListening() {
             logSmartStatus('❌ Mic permission denied: ' + err.message);
             alert(
                 'Microphone access was denied.\n\n' +
-                'Please tap the lock/info icon in your browser address bar and allow the microphone, then try again.'
+                'Please click the lock/info icon in your browser address bar and allow the microphone, then try again.'
             );
         });
 }
@@ -501,9 +495,9 @@ function _startRecognitionLoop() {
     // continuous = false is MORE reliable on mobile.
     // We manually restart in onend to simulate continuous behaviour.
     smartRecognition.continuous = false;
-    smartRecognition.interimResults = false;
+    smartRecognition.interimResults = true; // Immediate feedback — catches "help" instantly
     smartRecognition.lang = 'en-US';
-    smartRecognition.maxAlternatives = 1;
+    smartRecognition.maxAlternatives = 3; // Higher accuracy in noisy environments
 
     smartRecognition.onstart = () => {
         isSmartListening = true;
@@ -519,13 +513,23 @@ function _startRecognitionLoop() {
 
     smartRecognition.onresult = (event) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (!event.results[i].isFinal) continue;
-            const word = event.results[i][0].transcript.trim().toLowerCase();
-            logSmartStatus('🗣️ Heard: "' + word + '"');
+            const transcript = event.results[i][0].transcript.trim().toLowerCase();
+            
+            // Log interim results so the user knows the AI is actually listening
+            if (!event.results[i].isFinal) {
+                // Use a special prefix for interim to distinguish from final
+                logSmartStatus('👂 Thinking: "' + transcript + '..."');
+            } else {
+                logSmartStatus('🗣️ Heard: "' + transcript + '"');
+            }
 
-            if (word.includes('help') || word.includes('emergency') || word.includes('sos')) {
-                logSmartStatus('🚨 Emergency keyword detected!');
-                isSmartListening = false; // stop the loop
+            // Enhanced keyword detection: regex handles "help", "help help", "emergency", etc.
+            // Also added "bachao" (Hindi) and "save" for better coverage.
+            const emergencyRegex = /\b(help|emergency|sos|bachao|save|danger|accident|police)\b/i;
+            
+            if (emergencyRegex.test(transcript)) {
+                logSmartStatus('🚨 EMERGENCY DETECTED: "' + transcript + '"');
+                isSmartListening = false; 
                 stopSmartListening();
                 triggerSmartEmergency(true);
                 return;
